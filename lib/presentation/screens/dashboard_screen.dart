@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../providers/auth_provider.dart';
+import '../providers/dashboard_provider.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/expandable_card.dart';
 import '../../core/themes/app_theme.dart';
@@ -12,31 +15,13 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // Mock data for UI demonstration
-  final Map<String, dynamic> mockStats = {
-    'presentDays': 18,
-    'leavesTaken': 5,
-    'pendingRequests': 2,
-    'avgHours': 7.8,
-  };
-
-  final List<Map<String, dynamic>> mockAttendance = [
-    {'date': '2024-01-15', 'checkIn': '09:00 AM', 'checkOut': '06:00 PM', 'status': 'Present'},
-    {'date': '2024-01-14', 'checkIn': '09:15 AM', 'checkOut': '06:00 PM', 'status': 'Late'},
-    {'date': '2024-01-13', 'checkIn': '09:00 AM', 'checkOut': '05:30 PM', 'status': 'Present'},
-  ];
-
-  final List<Map<String, dynamic>> mockLeaves = [
-    {'type': 'Casual Leave', 'startDate': '2024-01-20', 'endDate': '2024-01-22', 'status': 'Approved', 'days': 3},
-    {'type': 'Sick Leave', 'startDate': '2024-01-10', 'endDate': '2024-01-11', 'status': 'Approved', 'days': 2},
-    {'type': 'Annual Leave', 'startDate': '2024-02-01', 'endDate': '2024-02-10', 'status': 'Pending', 'days': 10},
-  ];
-
-  final List<Map<String, dynamic>> mockHolidays = [
-    {'name': 'Republic Day', 'date': '2024-01-26', 'day': 'Friday', 'type': 'Public'},
-    {'name': 'Maha Shivaratri', 'date': '2024-03-08', 'day': 'Friday', 'type': 'Public'},
-    {'name': 'Holi', 'date': '2024-03-25', 'day': 'Monday', 'type': 'Public'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DashboardProvider>().loadDashboardData();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,45 +32,82 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              setState(() {});
+              context.read<DashboardProvider>().refreshData();
             },
           ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
+              context.read<AuthProvider>().logout();
               Navigator.pushReplacementNamed(context, '/login');
             },
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await Future.delayed(const Duration(seconds: 1));
-          setState(() {});
+      body: Consumer<DashboardProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                  ),
+                  SizedBox(height: 16),
+                  Text('Loading dashboard...'),
+                ],
+              ),
+            );
+          }
+          
+          if (provider.errorMessage != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: AppTheme.errorColor),
+                  const SizedBox(height: 16),
+                  Text(provider.errorMessage!),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => provider.refreshData(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+          
+          return RefreshIndicator(
+            onRefresh: () async => provider.refreshData(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildUserHeader(),
+                  const SizedBox(height: 24),
+                  _buildStatsGrid(provider),
+                  const SizedBox(height: 24),
+                  _buildAttendanceSection(provider),
+                  const SizedBox(height: 16),
+                  _buildLeaveSection(provider),
+                  const SizedBox(height: 16),
+                  _buildHolidaySection(provider),
+                ],
+              ),
+            ),
+          );
         },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildUserHeader(),
-              const SizedBox(height: 24),
-              _buildStatsGrid(),
-              const SizedBox(height: 24),
-              _buildAttendanceSection(),
-              const SizedBox(height: 16),
-              _buildLeaveSection(),
-              const SizedBox(height: 16),
-              _buildHolidaySection(),
-            ],
-          ),
-        ),
       ),
     );
   }
 
   Widget _buildUserHeader() {
+    final authProvider = context.watch<AuthProvider>();
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -124,9 +146,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'John Doe',
-                  style: TextStyle(
+                Text(
+                  authProvider.userName ?? 'User',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -134,7 +156,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Software Developer',
+                  authProvider.userEmail ?? 'employee@company.com',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 14,
@@ -159,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildStatsGrid() {
+  Widget _buildStatsGrid(DashboardProvider provider) {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -170,28 +192,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         StatCard(
           title: 'Present Days',
-          value: mockStats['presentDays'].toString(),
+          value: provider.stats['presentDays']?.toString() ?? '0',
           subtitle: 'This month',
           icon: Icons.check_circle_outline,
           color: AppTheme.successColor,
         ),
         StatCard(
           title: 'Leaves Taken',
-          value: mockStats['leavesTaken'].toString(),
+          value: provider.stats['leavesTaken']?.toString() ?? '0',
           subtitle: '12 remaining',
           icon: Icons.beach_access,
           color: AppTheme.warningColor,
         ),
         StatCard(
           title: 'Pending Requests',
-          value: mockStats['pendingRequests'].toString(),
+          value: provider.stats['pendingRequests']?.toString() ?? '0',
           subtitle: 'Leave requests',
           icon: Icons.pending_actions,
           color: AppTheme.accentColor,
         ),
         StatCard(
           title: 'Avg Hours/Day',
-          value: mockStats['avgHours'].toString(),
+          value: provider.stats['avgHours']?.toString() ?? '0',
           subtitle: 'Working hours',
           icon: Icons.timer,
           color: AppTheme.primaryColor,
@@ -200,7 +222,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildAttendanceSection() {
+  Widget _buildAttendanceSection(DashboardProvider provider) {
     return ExpandableCard(
       title: 'Recent Attendance',
       icon: Icons.calendar_today,
@@ -209,10 +231,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: mockAttendance.length,
+          itemCount: provider.attendance.length,
           separatorBuilder: (_, __) => const Divider(),
           itemBuilder: (context, index) {
-            return _buildAttendanceItem(mockAttendance[index]);
+            final attendance = provider.attendance[index];
+            return _buildAttendanceItem(attendance);
           },
         ),
       ],
@@ -287,7 +310,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildLeaveSection() {
+  Widget _buildLeaveSection(DashboardProvider provider) {
     return ExpandableCard(
       title: 'Leave Requests',
       icon: Icons.beach_access,
@@ -296,10 +319,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: mockLeaves.length,
+          itemCount: provider.leaves.length,
           separatorBuilder: (_, __) => const Divider(),
           itemBuilder: (context, index) {
-            return _buildLeaveItem(mockLeaves[index]);
+            final leave = provider.leaves[index];
+            return _buildLeaveItem(leave);
           },
         ),
       ],
@@ -361,12 +385,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               color: AppTheme.textSecondary,
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            leave['reason'] ?? '',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildHolidaySection() {
+  Widget _buildHolidaySection(DashboardProvider provider) {
     return ExpandableCard(
       title: 'Upcoming Holidays',
       icon: Icons.celebration,
@@ -375,10 +407,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: mockHolidays.length,
+          itemCount: provider.holidays.length,
           separatorBuilder: (_, __) => const Divider(),
           itemBuilder: (context, index) {
-            return _buildHolidayItem(mockHolidays[index]);
+            final holiday = provider.holidays[index];
+            return _buildHolidayItem(holiday);
           },
         ),
       ],
