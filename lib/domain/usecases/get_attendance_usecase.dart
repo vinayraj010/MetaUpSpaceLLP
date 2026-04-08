@@ -1,4 +1,4 @@
-import '../../data/repositories/employee_repository.dart';
+import 'package:metaup_employee_dashboard/domain/repositories/employee_repository.dart';
 import '../../data/models/attendance_model.dart';
 
 class GetAttendanceUseCase {

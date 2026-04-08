@@ -1,21 +1,46 @@
 import 'package:flutter/material.dart';
+import '../../domain/usecases/get_attendance_usecase.dart';
+import '../../domain/usecases/get_leaves_usecase.dart';
+import '../../domain/usecases/get_holidays_usecase.dart';
+import '../../data/models/attendance_model.dart';
+import '../../data/models/leave_model.dart';
+import '../../data/models/holiday_model.dart';
+import '../../core/utils/error_handler.dart';
 
 class DashboardProvider extends ChangeNotifier {
+  final GetAttendanceUseCase getAttendanceUseCase;
+  final GetLeavesUseCase getLeavesUseCase;
+  final GetHolidaysUseCase getHolidaysUseCase;
+  
+  DashboardProvider({
+    required this.getAttendanceUseCase,
+    required this.getLeavesUseCase,
+    required this.getHolidaysUseCase,
+  });
+  
   bool _isLoading = false;
   String? _errorMessage;
-  
-  // Dashboard data
-  Map<String, dynamic> _stats = {};
-  List<Map<String, dynamic>> _attendance = [];
-  List<Map<String, dynamic>> _leaves = [];
-  List<Map<String, dynamic>> _holidays = [];
+  List<AttendanceModel> _attendance = [];
+  List<LeaveModel> _leaves = [];
+  List<HolidayModel> _holidays = [];
+  AttendanceSummary? _attendanceSummary;
+  LeaveBalance? _leaveBalance;
   
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  Map<String, dynamic> get stats => _stats;
-  List<Map<String, dynamic>> get attendance => _attendance;
-  List<Map<String, dynamic>> get leaves => _leaves;
-  List<Map<String, dynamic>> get holidays => _holidays;
+  List<AttendanceModel> get attendance => _attendance;
+  List<LeaveModel> get leaves => _leaves;
+  List<HolidayModel> get holidays => _holidays;
+  AttendanceSummary? get attendanceSummary => _attendanceSummary;
+  LeaveBalance? get leaveBalance => _leaveBalance;
+  
+  // For backward compatibility with UI
+  Map<String, dynamic> get stats => {
+    'presentDays': _attendanceSummary?.totalPresent ?? 0,
+    'leavesTaken': _leaveBalance?.usedLeaves ?? 0,
+    'pendingRequests': _leaves.where((l) => l.status == 'Pending').length,
+    'avgHours': _attendanceSummary?.averageHours ?? 0,
+  };
   
   Future<void> loadDashboardData() async {
     _isLoading = true;
@@ -23,45 +48,57 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
     
     try {
-      // Simulate API calls
-      await Future.delayed(const Duration(seconds: 1));
-      
-      _stats = {
-        'presentDays': 18,
-        'leavesTaken': 5,
-        'pendingRequests': 2,
-        'avgHours': 7.8,
-      };
-      
-      _attendance = [
-        {'date': '2024-01-15', 'checkIn': '09:00 AM', 'checkOut': '06:00 PM', 'status': 'Present'},
-        {'date': '2024-01-14', 'checkIn': '09:15 AM', 'checkOut': '06:00 PM', 'status': 'Late'},
-        {'date': '2024-01-13', 'checkIn': '09:00 AM', 'checkOut': '05:30 PM', 'status': 'Present'},
-      ];
-      
-      _leaves = [
-        {'type': 'Casual Leave', 'startDate': '2024-01-20', 'endDate': '2024-01-22', 'status': 'Approved', 'days': 3, 'reason': 'Family function'},
-        {'type': 'Sick Leave', 'startDate': '2024-01-10', 'endDate': '2024-01-11', 'status': 'Approved', 'days': 2, 'reason': 'Fever'},
-        {'type': 'Annual Leave', 'startDate': '2024-02-01', 'endDate': '2024-02-10', 'status': 'Pending', 'days': 10, 'reason': 'Vacation'},
-      ];
-      
-      _holidays = [
-        {'name': 'Republic Day', 'date': '2024-01-26', 'day': 'Friday', 'type': 'Public'},
-        {'name': 'Maha Shivaratri', 'date': '2024-03-08', 'day': 'Friday', 'type': 'Public'},
-        {'name': 'Holi', 'date': '2024-03-25', 'day': 'Monday', 'type': 'Public'},
-      ];
+      await Future.wait([
+        _loadAttendance(),
+        _loadLeaves(),
+        _loadHolidays(),
+      ]);
       
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to load dashboard data';
+      _errorMessage = ErrorHandler.handleError(e);
       _isLoading = false;
       notifyListeners();
+      
+      // Log error for debugging
+      ErrorHandler.logError(e);
     }
   }
   
-  void refreshData() {
-    loadDashboardData();
+  Future<void> _loadAttendance() async {
+    try {
+      _attendance = await getAttendanceUseCase.execute();
+      _attendanceSummary = await getAttendanceUseCase.repository.getAttendanceSummary();
+    } catch (e) {
+      _attendance = [];
+      _attendanceSummary = null;
+      rethrow;
+    }
+  }
+  
+  Future<void> _loadLeaves() async {
+    try {
+      _leaves = await getLeavesUseCase.execute();
+      _leaveBalance = await getLeavesUseCase.repository.getLeaveBalance();
+    } catch (e) {
+      _leaves = [];
+      _leaveBalance = null;
+      rethrow;
+    }
+  }
+  
+  Future<void> _loadHolidays() async {
+    try {
+      _holidays = await getHolidaysUseCase.execute();
+    } catch (e) {
+      _holidays = [];
+      rethrow;
+    }
+  }
+  
+  Future<void> refreshData() async {
+    await loadDashboardData();
   }
   
   void clearError() {

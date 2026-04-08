@@ -4,6 +4,8 @@ import '../providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 import 'dashboard_screen.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/utils/validators.dart';
+import '../../core/utils/error_handler.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,6 +35,9 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       
       if (success && mounted) {
+        // Show success message
+        ErrorHandler.showSuccessSnackBar(context, 'Login successful!');
+        
         await dashboardProvider.loadDashboardData();
         if (mounted) {
           Navigator.pushReplacement(
@@ -41,13 +46,8 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else if (mounted && authProvider.errorMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(authProvider.errorMessage!),
-            backgroundColor: AppTheme.errorColor,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        // Show error message
+        ErrorHandler.showErrorSnackBar(context, authProvider.errorMessage!);
       }
     }
   }
@@ -114,15 +114,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             prefixIcon: Icon(Icons.email_outlined),
                           ),
                           keyboardType: TextInputType.emailAddress,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Email is required';
-                            }
-                            if (!value.contains('@') || !value.contains('.')) {
-                              return 'Enter a valid email';
-                            }
-                            return null;
-                          },
+                          textInputAction: TextInputAction.next,
+                          validator: Validators.validateEmail,
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -144,15 +137,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           obscureText: _obscurePassword,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Password is required';
-                            }
-                            if (value.length < 6) {
-                              return 'Password must be at least 6 characters';
-                            }
-                            return null;
-                          },
+                          textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) => _handleLogin(authProvider, context.read<DashboardProvider>()),
+                          validator: Validators.validatePassword,
                         ),
                       ],
                     ),

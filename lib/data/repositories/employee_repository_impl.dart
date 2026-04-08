@@ -1,4 +1,4 @@
-import 'package:metaup_employee_dashboard/data/repositories/employee_repository.dart';
+import 'package:metaup_employee_dashboard/domain/repositories/employee_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../datasources/remote/api_service.dart';
 import '../models/user_model.dart';
