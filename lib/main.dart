@@ -12,7 +12,6 @@ import 'domain/usecases/get_holidays_usecase.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/dashboard_provider.dart';
 import 'presentation/screens/login_screen.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
